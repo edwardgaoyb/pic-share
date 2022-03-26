@@ -173,6 +173,7 @@ function App() {
 
     const SERVER_URL = "ws://localhost:7000/";
     const partitionList = process.env.REACT_APP_PARTITION_LIST;
+    console.log('partitionList: ', partitionList);
     useEffect(() => {
         socket.current = io.connect(SERVER_URL);
 
@@ -258,13 +259,13 @@ function App() {
                         />
                         {/* <ImageUploader setFile={setFile}/> */}
                         <PartitionList partitionList={process.env.REACT_APP_PARTITION_LIST} usersList={usersList} />
-                        <Button
+                        {partitionList === undefined || partitionList === '' && <Button
                             color="success"
                             renderAs="span"
                             onClick={downloadPartitions}
                         >
                             Download partitions
-                        </Button>
+                        </Button>}
                     </Columns.Column>
                     <Columns.Column>
                         {/* {usersList.length > 1 ? usersList.map(({ username, timestamp }) => username !== myUsername &&
