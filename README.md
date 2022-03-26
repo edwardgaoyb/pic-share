@@ -1,37 +1,43 @@
-<a href="https://pic-p2p-share.herokuapp.com">
-    <img src="img/logo.png" alt="Pic Share logo" title="Pic Share" align="right" height="100" />
-</a>
-
-Pic Share
+WebRTC Download Demo
 ======================
 
+## Prerequisites
 
-[Pic Share](https://pic-p2p-share.herokuapp.com) is a P2P picture sharing web application using webRTC
+|Env|Version|
+|---|---|
+|OS|Ubuntu 20.04.1|
+|NodeJS|v14.19.1|
+|Docker|20.10.14|
+|docker-compose|1.29.2|
 
-[![Aimeos TYPO3 demo](img/screenshot-1.png)](https://pic-p2p-share.herokuapp.com)
+
+## Architecture
+
+The client program is a react app and the server program is a WebSocket server for signaling.
+
+1. All the clients register the file partitions they have to the Signaling server.
+1. Client #1 requests partitons from Client #2 and Client #3
+1. When all the partitions are downloaded to Client #1, the file will be displayed in a preview window
 
 
-## Installation
+## Development
 
 Clone and install project dependecies using npm or yarn 
 
 `` yarn install ``
 
-once that is done you can run it on youtr local machine
+Use the script to launch one server and three clients:
 
-`` yarn start ``
+`` ./launch_server_and_3_clients.sh ``
 
-## Development
+Three Browser windows (or tabs) will be opened. A 'Download partitions' button will be shown in one of the windows (the window with url `localhost:3010`).
 
-you can run the project in dev mode including both server and front-end code
+The other 2 clients do not have this button.
 
-`` yarn dev ``
+Click the download button, wait for all the partitions to be downloaded from the other 2 clients (browsers).
 
-you can also run the client or the server independently in dev mode
-
-`` yarn dev:client ``
-
-`` yarn dev:server``
+A preview window will show the following picture:
+![](/public/sample_data/orig.jpg)
 
 ## Simulate the multipe-node environment with Docker
 
@@ -50,9 +56,3 @@ To access the clients, open a browser window and visit the following URLs:
 1. localhost:3010
 1. localhost:3020
 1. localhost:3030
-
-## TBD: distributed file sharing
-
-The current implementation only supports transfering files between 2 nodes using WebRTC. 
-
-The next step is to add the function to demonstrate the multi-node distributed file sharing.
