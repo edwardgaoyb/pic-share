@@ -3,7 +3,7 @@ import "./components/EmptyPlaceholder.css"
 import { Button, Container, Columns, Navbar, Modal, Image } from 'react-bulma-components/dist';
 import React, { useRef, useEffect, useState } from "react";
 import io from "socket.io-client";
-import Peer from "simple-peer";
+import Peer from "peerjs";
 import UserInfo from "./components/UserInfo";
 // import ShareRequest from "./components/ShareRequest";
 // import ImageUploader from "./components/ImageUploader";
@@ -15,6 +15,7 @@ import logo from './logo.png'
 function App() {
     const socket = useRef();
     const peerInstances = useRef({});
+    const usernameHolder = useRef();
     // const [requested, setRequested] = useState(false);
     // const [sentRequest, setSentRequest] = useState(false);
     // const [sending, setSending] = useState(false);
@@ -26,7 +27,7 @@ function App() {
     // const [peerUsername, setPeerUsername] = useState("");
     // const [peerSignal, setPeerSignal] = useState("");
     const expectedPartitionIds = useRef([]);
-    const allPartitions = useRef({}); // {'00': <binary data for large00>, '01': <binary data of large01>, ...}}
+    const receivedPartitions = useRef({}); // {'00': <binary data for large00>, '01': <binary data of large01>, ...}}
     const SOCKET_EVENT = {
         CONNECTED: "connected",
         DISCONNECTED: "disconnect",
@@ -42,112 +43,70 @@ function App() {
         REQUEST_PARTITION: "request_partition",
         DOWNLOAD_REQUESTED: "download_requested",
     };
-    const peerConfig = {
-        iceServers: [
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' },
-            { urls: 'stun:stun2.l.google.com:19302' },
-            { urls: 'stun:stun3.l.google.com:19302' },
-            { urls: 'stun:stun4.l.google.com:19302' },
-        ],
-    };
+
     const acceptRequest = (senderUsername, senderSignal, partition) => {
-        //setRequested(false);
-        const peer = new Peer({
-            initiator: false,
-            trickle: false
+        var currUN = usernameHolder.current;
+        console.log(`creating new Peer in acceptRequest(): ${currUN}_${partition}`)
+        const peer = new Peer(`${currUN}_${partition}`, {
+            host: 'localhost',
+            port: 9000,
+            path: '/myapp'
         });
-        peer.on("signal", (data) => {
-            socket.current.emit(SOCKET_EVENT.ACCEPT_REQUEST, { signal: data, to: senderUsername, partition: partition });
-        });
-        peer.on("connect", () => {
-            //setReceiving(true);
-        });
-        const fileChunks = [];
-        peer.on('data', data => {
-            if (data.toString().startsWith('PARTITION:')) {
-                const partitionName = data.toString().split(':')[1];
-                console.log(`Start receiving partion: ${partitionName}`);
-            } else if (data.toString() === 'EOF') {
-                console.log('Finished receiving partition: ')
+        peer.on('connection', function (conn) {
+            conn.on('data', data => {
+                console.log(`Finished receiving partition: ${partition}`)
                 // Once, all the chunks are received, combine them to form a Blob
-                allPartitions.current[partition] = fileChunks;
-                var keys = Object.keys(allPartitions.current);
-                console.log('allPartitions: ', allPartitions.current);
+                receivedPartitions.current[partition] = data;
+                var keys = Object.keys(receivedPartitions.current);
+                console.log('allPartitions: ', receivedPartitions.current);
                 console.log('expectedPartitionIds: ', expectedPartitionIds.current);
                 if (keys.length === expectedPartitionIds.current.length) {
                     console.log('---> merging all partitions into one file')
-                    var allChunks = [];
+                    var mergedPartitions = [];
                     for (const partitionId of expectedPartitionIds.current) {
                         console.log('partitionId: ', partitionId);
-                        allChunks = [...allChunks, ...allPartitions.current[partitionId]];
+                        mergedPartitions = [...mergedPartitions, receivedPartitions.current[partitionId]];
                     }
-                    console.log('allChunks: ', allChunks);
-                    const file = new Blob(allChunks);
+                    console.log('allChunks: ', mergedPartitions);
+                    const file = new Blob(mergedPartitions);
                     setReceivedFilePreview(URL.createObjectURL(file));
                 }
                 else {
                     console.log('More partitions to download');
                 }
-                // setReceiving(false);
-            } else {
-                // Keep appending various file chunks
-                console.log('partition: ', partition);
-                console.log('data: ', data);
-                console.log('fileChunks: ', fileChunks)
-                fileChunks.push(data);
-            }
-
-        });
-
-        peer.signal(senderSignal);
-        console.log('senderSignal: ', senderSignal);
-        peerInstances.current[partition] = peer;
-    };
-    // const rejectRequest = () => {
-    //     socket.current.emit(SOCKET_EVENT.REJECT_REQUEST, { to: peerUsername });
-    //     setRequested(false);
-    // };
-    const sendRequest = (username, partition, src) => {
-        //setLoading(true);
-        //setPeerUsername(username);
-        const peer = new Peer({
-            initiator: true,
-            trickle: false,
-            config: peerConfig,
-        });
-        peer.on("signal", (data) => {
-            console.log('sendRequest(), to: ', username)
-
-            socket.current.emit(SOCKET_EVENT.SEND_REQUEST, {
-                to: username,
-                signal: data,
-                username: src,
-                partition: partition,
             });
-            //setSentRequest(true);
-            //setLoading(false);
         });
-        peer.on("connect", async () => {
-            // setSending(true);
-            //setSentRequest(false);
+        socket.current.emit(SOCKET_EVENT.ACCEPT_REQUEST, { src: currUN, to: senderUsername, partition: partition });
+    };
+
+    const sendFile = (username, partition) => {
+        const peer = peerInstances.current[partition]
+        console.log(`sendFile() -> connecting to ${username}_${partition}`)
+        var conn = peer.connect(`${username}_${partition}`);
+        conn.on('open', async function () {
             const path = `/sample_data/largepic${partition}`
             let file = new File([await (await fetch(path)).blob()], path);
             let buffer = await file.arrayBuffer();
-            const chunkSize = 16 * 1024;
-            peer.send(`PARTITION:${partition}`);
-            while (buffer.byteLength) {
-                console.log('partition: ', partition);
-                console.log('remaining buffer length: ', buffer.byteLength);
-                const chunk = buffer.slice(0, chunkSize);
-                buffer = buffer.slice(chunkSize, buffer.byteLength);
-                // Off goes the chunk!
-                peer.send(chunk);
-            }
-            peer.send('EOF');
-            //setSending(false);
+            conn.send(buffer, true);
+        });
+    }
+
+    const sendRequest = (username, partition, src) => {
+        var currUN = usernameHolder.current;
+        console.log(`creating new peer in sendRequest(): ${currUN}_${partition}`)
+        const peer = new Peer(`${currUN}_${partition}`, {
+            host: 'localhost',
+            port: 9000,
+            path: '/myapp'
         });
         peerInstances.current[partition] = peer;
+        socket.current.emit(SOCKET_EVENT.SEND_REQUEST, {
+            to: username,
+            signal: null,
+            username: src,
+            partition: partition,
+        });
+
     };
 
     const downloadPartitions = () => {
@@ -179,6 +138,7 @@ function App() {
 
         socket.current.on(SOCKET_EVENT.CONNECTED, (username) => {
             setMyUsername(username)
+            usernameHolder.current = username;
             if (partitionList) {
                 // register available partitions
                 console.log('partition list found on this node: ', partitionList);
@@ -199,15 +159,14 @@ function App() {
         });
 
         socket.current.on(SOCKET_EVENT.REQUEST_SENT, ({ signal, username, partition }) => {
-            // setPeerUsername(username);
-            // setPeerSignal(signal);
-            // setRequested(true);
             acceptRequest(username, signal, partition);
         });
 
-        socket.current.on(SOCKET_EVENT.REQUEST_ACCEPTED, ({ signal, partition }) => {
-            console.log('signal: ', signal);
-            peerInstances.current[partition].signal(signal);
+        socket.current.on(SOCKET_EVENT.REQUEST_ACCEPTED, ({ src, partition }) => {
+            console.log('SOCKET_EVENT.REQUEST_ACCEPTED')
+            console.log('src: ', src);
+            console.log('partition: ', partition);
+            sendFile(src, partition)
         });
 
         socket.current.on(SOCKET_EVENT.DOWNLOAD_REQUESTED, ({ from, partition, to }) => {
@@ -218,11 +177,11 @@ function App() {
     }, []);
     // const [file, setFile] = useState(null);
     const [receivedFilePreview, setReceivedFilePreview] = useState("");
-    useEffect(() => () => {
-        // Make sure to revoke the data uris to avoid memory leaks
-        console.log('destruting filePreview...')
-        URL.revokeObjectURL(receivedFilePreview)
-    }, [receivedFilePreview]);
+    // useEffect(() => () => {
+    //     // Make sure to revoke the data uris to avoid memory leaks
+    //     console.log('destruting filePreview...')
+    //     URL.revokeObjectURL(receivedFilePreview)
+    // }, [receivedFilePreview]);
 
     return (
         <React.Fragment>
@@ -259,7 +218,7 @@ function App() {
                         />
                         {/* <ImageUploader setFile={setFile}/> */}
                         <PartitionList partitionList={process.env.REACT_APP_PARTITION_LIST} usersList={usersList} />
-                        {partitionList === undefined || partitionList === '' && <Button
+                        {(partitionList === undefined || partitionList === '') && <Button
                             color="success"
                             renderAs="span"
                             onClick={downloadPartitions}

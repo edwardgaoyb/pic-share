@@ -4,13 +4,19 @@ set -x
 
 # server
 npm run dev:server &
+
+# peerjs server
+docker run -p 9000:9000 -d peerjs/peerjs-server
+
 # client 1
 export PORT=3010
 npm run dev:client &
+
 # client 2
 export PORT=3020
 export PARTITION_LIST=00,01,02
 npm run dev:client &
+
 # client 3
 export PORT=3030
 export PARTITION_LIST=03,04,05

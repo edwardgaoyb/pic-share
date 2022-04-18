@@ -79,16 +79,10 @@ io.on("connection", (socket) => {
     logger.log(SOCKET_EVENT.SEND_REQUEST, username);
   });
 
-  socket.on(SOCKET_EVENT.ACCEPT_REQUEST, ({ signal, to, partition }) => {
+  socket.on(SOCKET_EVENT.ACCEPT_REQUEST, ({ src, to, partition }) => {
     // tell user the request has been accepted
-    io.to(users[to].id).emit(SOCKET_EVENT.REQUEST_ACCEPTED, { signal, partition });
-    logger.log(SOCKET_EVENT.ACCEPT_REQUEST, username);
-  });
-
-  socket.on(SOCKET_EVENT.REJECT_REQUEST, ({ to }) => {
-    // tell user the request has been rejected
-    io.to(users[to].id).emit(SOCKET_EVENT.REQUEST_REJECTED);
-    logger.log(SOCKET_EVENT.REJECT_REQUEST, username);
+    io.to(users[to].id).emit(SOCKET_EVENT.REQUEST_ACCEPTED, { src, partition });
+    logger.log(SOCKET_EVENT.ACCEPT_REQUEST, `username: ${username}, src: ${src}, to: ${to}, partition: ${partition}`);
   });
 
   socket.on(SOCKET_EVENT.REGISTER_PARTITIONS, ({ from, partitions }) => {

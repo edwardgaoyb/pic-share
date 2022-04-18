@@ -4,6 +4,10 @@ services:
     image: webrtc-p2p-server
     ports:
       - 7000:7000
+  peerjs_server:
+    image: peerjs/peerjs-server
+    ports:
+      - 9000:9000
   client1:
     image: webrtc-p2p-client
     ports:
